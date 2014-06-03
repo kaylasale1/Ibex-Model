@@ -1,0 +1,326 @@
+Ibex : CONTEXT = 
+BEGIN
+  STAGE : TYPE = {m_kid,f_kid,m_sm,f_sm,m_rut,f_rut,pregnant,weaning,null};
+  HEALTH : TYPE = {healthy,unhealthy,dead};
+  NUMBER : TYPE = [0..15]; %max # of ibex in herd
+  CELL : TYPE = {c1,c2,c3,c4,c5,c6,c7,c8,c9};
+  FLAG : TYPE = BOOLEAN;
+  RESOURCES : TYPE = {zero,low,high};
+  MONTH : TYPE = {Jan,Feb,March,Apr,May,June,July,Aug,Sept,Oct,Nov,Dec}; %month
+  HERDtuple : TYPE = [ARRAY STAGE OF NUMBER, ARRAY STAGE OF HEALTH]; 
+
+    herd_health(h : HEALTH, s : STAGE, p : FLAG, r : RESOURCES, A : ARRAY STAGE OF HEALTH, B : ARRAY STAGE OF NUMBER): HEALTH = 
+  		IF B[s] = 0 THEN healthy
+  		ELSIF A=[[i:STAGE] healthy] AND s=weaning THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A[weaning]=unhealthy AND s=pregnant THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND s=m_kid OR s=f_kid THEN
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND A[m_kid]=unhealthy 
+  				AND A[f_kid]=unhealthy AND s=f_rut OR s=m_rut THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND A[m_kid]=unhealthy 
+  				AND A[f_kid]=unhealthy AND A[f_rut]=unhealthy AND A[m_rut]=unhealthy 
+  				AND s=f_sm OR s=m_sm THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A=[[i:STAGE] unhealthy] AND s=weaning THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+		ELSIF A[weaning]=dead AND s=pregnant THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND s=m_kid OR s=f_kid THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND A[m_kid]=dead AND A[f_kid]=dead 
+  				AND s=f_rut OR s=m_rut THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND A[m_kid]=dead AND A[f_kid]=dead 
+  				AND A[f_rut]=dead AND A[m_rut]=dead AND s=f_sm OR s=m_sm THEN 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ELSIF s=null THEN dead
+  		ELSE 
+  			IF r = zero OR p = TRUE THEN 
+  				IF h=healthy THEN unhealthy
+  				ELSE dead
+  				ENDIF
+  			ELSE 
+  				IF h=dead THEN dead
+  				ELSE healthy
+  				ENDIF
+  			ENDIF
+  		ENDIF;
+  		
+  		%can you call functions within functions??
+  		
+ 	%aug_h(h : HEALTH, p : FLAG, r : RESOURCES): HEALTH = 
+ 	%  	IF r = zero OR p = TRUE THEN inc_h_down(h)
+  	%	ELSE inc_h_up(h)
+  	%	ENDIF; 
+  			
+  	inc_h_down(h : HEALTH): HEALTH = 
+  		IF h=healthy THEN unhealthy
+  		ELSE dead
+  		ENDIF;
+
+  	inc_h_up(h : HEALTH): HEALTH = 
+  		IF h=dead THEN dead
+  		ELSE healthy
+  		ENDIF;
+  		
+  	inc_r_up(r : RESOURCES): RESOURCES = 
+  		IF r=zero THEN low
+  		ELSE high
+  		ENDIF;
+  		
+  	inc_r_down(r : RESOURCES): RESOURCES =
+  		IF r=high THEN low
+  		ELSE zero
+  		ENDIF;
+  		
+    clock(m : MONTH): MONTH = 
+  		IF m=Jan THEN Feb
+  		ELSIF m=Feb THEN March
+  		ELSIF m=March THEN Apr
+  		ELSIF m=Apr THEN May
+  		ELSIF m=May THEN June
+  		ELSIF m=June THEN July
+  		ELSIF m=July THEN Aug
+  		ELSIF m=Aug THEN Sept
+  		ELSIF m=Sept THEN Oct
+  		ELSIF m=Oct THEN Nov
+  		ELSIF m=Nov THEN Dec
+  		ELSE Jan
+  		ENDIF;	
+
+  	maturing(m : MONTH, h : HEALTH, s : STAGE, f : FLAG, A : ARRAY STAGE OF NUMBER): NUMBER = 
+		IF s=null THEN 15 - (A[m_kid] + A[f_kid] + A[m_sm] + A[f_sm] + A[m_rut] + A[f_rut] + A[pregnant] + A[weaning])
+		ELSIF h=dead THEN 0
+		ELSIF h=healthy AND m=Sept AND s=m_sm THEN 0
+  		ELSIF h=healthy AND m=Sept AND s=f_sm THEN 0
+  		ELSIF h=healthy AND m=Sept AND s=m_rut THEN A[m_sm]
+  		ELSIF h=healthy AND m=Sept AND s=f_rut THEN A[f_sm]
+  		ELSIF h=healthy AND f=TRUE AND m=Oct AND s=f_rut THEN 0
+  		ELSIF h=healthy AND f=TRUE AND m=Oct AND s=pregnant THEN A[f_rut]
+  		ELSIF h=healthy AND m=Nov AND s=pregnant THEN 0
+		ELSIF h=healthy AND m=Nov AND s=weaning THEN A[pregnant]
+		ELSIF h=healthy AND m=Dec AND s=m_kid THEN A[weaning]
+		ELSIF h=healthy AND m=Dec AND s=f_kid THEN A[weaning]
+		ELSIF h=healthy AND m=Dec AND s=m_sm THEN A[m_rut] + A[m_sm] + A[m_kid]
+		ELSIF h=healthy AND m=Dec AND s=f_sm 
+			THEN A[f_rut] + A[f_sm] + A[f_kid] + A[weaning] + A[pregnant] 
+		ELSIF m=Dec AND s=m_rut THEN 0
+		ELSIF m=Dec AND s=f_rut THEN 0
+		ELSIF h=healthy AND m=Dec AND s=pregnant THEN 0
+		ELSIF h=healthy AND m=Dec AND s=weaning THEN 0
+  		ELSIF s=pregnant THEN 0		
+  		ELSE A[s]
+  		ENDIF;
+  		%still need to figure out distribution of sexes at 'birth' and 'death': floor(0.5 * A[weaning])?
+  	
+  	fertility(m_rut : NUMBER, f_rut : NUMBER): BOOLEAN = 
+  		IF m_rut > 0 AND f_rut > 0 THEN TRUE
+  		ELSE FALSE
+  		ENDIF;
+  	
+  	dangerous(c : CELL, p : CELL): BOOLEAN =
+  		IF c=p THEN TRUE
+  		ELSE FALSE
+  		ENDIF;
+  		
+  TuplePractice : MODULE =
+  BEGIN
+    LOCAL f : FLAG 						%fertility
+	LOCAL danger : FLAG 				%herd threatened by predator
+	LOCAL p : CELL						%predator location
+	LOCAL c : CELL						%herd location
+    LOCAL m : MONTH						%month
+    LOCAL A : HERDtuple					%herd A
+    LOCAL r : ARRAY CELL OF RESOURCES 	%landscape resources/food availability
+  
+  DEFINITION
+  	p IN {c6,c8,c9};
+  	danger = dangerous(c,p);
+  	f = fertility(A.1[m_rut], A.1[f_rut]);	
+					
+  INITIALIZATION
+  	m = Sept;
+    A.1[m_kid] = 0;
+	A.1[f_kid] = 0;
+	A.1[m_sm] = 6;
+	A.1[f_sm] = 1;
+	A.1[m_rut] = 0;
+	A.1[f_rut] = 0;
+	A.1[pregnant] = 0;
+	A.1[weaning] = 0;
+  	A.1[null] = 15 - (A.1[m_kid] + A.1[f_kid] + A.1[m_sm] + A.1[f_sm] 
+				+ A.1[m_rut] + A.1[f_rut] + A.1[pregnant] + A.1[weaning]);
+	A.2 = [[s:STAGE] healthy];
+  	c = c1;
+	r = [[c:CELL] zero];
+	
+  TRANSITION
+  [
+	  		  
+	 r[c]=zero AND c=c' --> 
+    	A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+    	A'.2=[[s:STAGE] inc_h_down(A.2[s])];
+    	m'=clock(m);
+     []
+     
+	 A.1[null] = 15 --> c'=c;
+     []
+     
+     c=c1 -->
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+		c' IN {c1,c2,c4,c5};
+     	m'=clock(m);
+		%would like to say, if danger=TRUE then c=c1 (ibex escapes) else in {..}
+     []
+
+     c=c2 -->
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+		c' IN {c1,c2,c3,c4,c5,c6};
+     	m'=clock(m);
+     []
+     
+    c=c3 -->
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+		c' IN {c2,c3,c5,c6};
+     	m'=clock(m);
+    []
+    
+    c=c4 --> 
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+    	c' IN {c1,c2,c4,c5,c7,c8};
+     	m'=clock(m);
+    []
+    
+    c=c5 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+    	c' IN {c1,c2,c3,c4,c5,c6,c7,c8,c9};
+     	m'=clock(m);
+    []
+    
+    c=c6 --> 
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+    	c' IN {c2,c3,c5,c6,c8,c9};
+     	m'=clock(m);
+
+    []
+    c=c7 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+    	c' IN {c4,c5,c7,c8};
+     	m'=clock(m);
+
+    []
+    c=c8 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+    	c' IN {c4,c5,c6,c7,c8,c9};
+     	m'=clock(m);
+
+    []
+    c=c9 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] maturing(m, A.2[s], s, f, A.1)];
+		A'.2 = [[s:STAGE] herd_health(A.2[s], s, danger, r[c], A.2, A.1)];
+    	c' IN {c5,c6,c8,c9};
+     	m'=clock(m);
+
+  ]
+  END;
+END
