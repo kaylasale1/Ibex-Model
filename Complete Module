@@ -1,0 +1,288 @@
+Ibex : CONTEXT = 
+BEGIN
+  STAGE : TYPE = {m_kid,f_kid,m_sm,f_sm,m_rut,f_rut,pregnant,weaning,null};
+  HEALTH : TYPE = {healthy,unhealthy,dead};
+  NUMBER : TYPE = [0..15]; %max # of ibex in herd
+  CELL : TYPE = {c1,c2,c3,c4,c5,c6,c7,c8,c9}; %for a larger area, consider using (x,y) coordinate system
+  FLAG : TYPE = BOOLEAN;
+  RESOURCES : TYPE = {zero,low,high};
+  MONTH : TYPE = {Jan,Feb,March,Apr,May,June,July,Aug,Sept,Oct,Nov,Dec}; %month
+  HERDtuple : TYPE = [ARRAY STAGE OF NUMBER, ARRAY STAGE OF HEALTH]; 
+
+  	inc_h_down(h : HEALTH): HEALTH = 
+  		IF h=healthy THEN unhealthy
+  		ELSE dead
+  		ENDIF;
+
+  	inc_h_up(h : HEALTH): HEALTH = 
+  		IF h=dead THEN dead
+  		ELSE healthy
+  		ENDIF;
+    		
+  	inc_r_down(r : RESOURCES): RESOURCES =
+  		IF r=high THEN low
+  		ELSE zero
+  		ENDIF;
+  		
+  	inc_r_up(r : RESOURCES): RESOURCES = 
+  		IF r=zero THEN low
+  		ELSE high
+  		ENDIF;
+  		
+ 	aug_h(h : HEALTH, p : FLAG, r : RESOURCES): HEALTH = 
+ 	  	IF r = zero OR p = TRUE THEN inc_h_down(h)
+  		ELSE inc_h_up(h)
+  		ENDIF; 
+  	
+  	inc_stage_h(s: STAGE, h : HEALTH, p : FLAG, r : RESOURCES, A : ARRAY STAGE OF HEALTH): HEALTH = 
+  	  	IF A=[[i:STAGE] healthy] AND s=weaning THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND s=pregnant THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND s=m_kid OR s=f_kid THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND A[m_kid]=unhealthy 
+  				AND A[f_kid]=unhealthy AND s=f_rut OR s=m_rut THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND A[m_kid]=unhealthy 
+  				AND A[f_kid]=unhealthy AND A[f_rut]=unhealthy AND A[m_rut]=unhealthy 
+  				AND s=f_sm OR s=m_sm THEN aug_h(h, p, r)
+  		ELSIF A=[[i:STAGE] unhealthy] AND s=weaning THEN aug_h(h, p, r)
+		ELSIF A[weaning]=dead AND s=pregnant THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND s=m_kid OR s=f_kid THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND A[m_kid]=dead AND A[f_kid]=dead 
+  				AND s=f_rut OR s=m_rut THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND A[m_kid]=dead AND A[f_kid]=dead 
+  				AND A[f_rut]=dead AND A[m_rut]=dead AND s=f_sm OR s=m_sm THEN aug_h(h, p, r)
+  		ELSE aug_h(h, p, r)
+  		ENDIF;
+  	
+  	health_fn(s : STAGE, h: HEALTH, No : ARRAY STAGE OF NUMBER, p : BOOLEAN, r : RESOURCES, A : ARRAY STAGE OF HEALTH): HEALTH =
+  		IF s=null THEN healthy
+  		%ELSIF No'=0 THEN healthy
+  		ELSIF h=dead THEN healthy
+  		ELSIF h=healthy and No[s]=0 THEN h
+  		ELSE inc_stage_h(s, h, p, r, A)
+  		ENDIF;
+  		
+  	mature(s : STAGE, No : ARRAY STAGE OF NUMBER, m : MONTH, f : BOOLEAN): NUMBER =
+  		IF m=Sept THEN
+  			IF s=m_sm THEN 0
+  			ELSIF s=f_sm THEN 0
+  			ELSIF s=m_rut THEN No[m_sm]
+  			ELSIF s=f_rut THEN No[f_sm]
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Oct THEN
+  			IF s=f_rut AND f=TRUE THEN 0
+  			ELSIF s=pregnant AND f=TRUE THEN No[f_rut]
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Nov THEN
+  			IF s=pregnant THEN 0
+  			ELSIF s=weaning then No[pregnant]
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Dec THEN
+  			IF s=m_kid OR s=f_kid THEN No[weaning]
+  			ELSIF s=m_sm THEN No[m_rut] + No[m_sm] + No[m_kid]
+  			ELSIF s=f_sm THEN No[f_rut] + No[f_sm] + No[f_kid] + No[weaning] + No[pregnant]
+  			ELSIF s=m_rut OR s=f_rut OR s=pregnant OR s=weaning THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSE No[s]
+  		ENDIF; 
+  		
+  	tabulate(s : STAGE, No : ARRAY STAGE OF NUMBER, m : MONTH): NUMBER =
+  	  	IF m=Sept THEN
+  			IF s=m_sm THEN No[m_sm] + No[m_rut]
+  			ELSIF s=f_sm THEN No[f_sm] + No[f_rut]
+  			ELSIF s=m_rut or s=f_rut THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Oct THEN
+    		IF s=m_sm THEN No[m_sm] + No[m_rut]
+  			ELSIF s=f_sm THEN No[f_sm] + No[f_rut] %pregnant ibex don't survive being unhealthy or predated
+  			ELSIF s=m_rut or s=f_rut THEN 0
+  			ELSIF s=pregnant THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Nov THEN
+    		IF s=m_sm THEN No[m_sm] + No[m_rut]
+  			ELSIF s=f_sm THEN No[f_sm] + No[f_rut] + No[weaning]  %pregnant ibex don't survive being unhealthy or predated
+  			ELSIF s=m_rut or s=f_rut THEN 0
+  			ELSIF s=pregnant THEN 0
+  			ELSIF s=weaning THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Dec THEN
+  			IF s=m_kid THEN No[m_kid] %unhealthy kids do not mature, and there are no new kids because babies died whilst weaning
+  			ELSIF s=f_kid THEN No[f_kid]
+  			ELSIF s=m_sm THEN No[m_rut] + No[m_sm]
+  			ELSIF s=f_sm THEN No[f_rut] + No[f_sm]
+  			ELSIF s=m_rut OR s=f_rut OR s=pregnant OR s=weaning THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSE No[s]
+  		ENDIF;
+  		
+  		%order of incurring "unhealthy": weaning, pregnant, kids, rut, sm
+  		
+  	stage_fn(s : STAGE, h: HEALTH, No : ARRAY STAGE OF NUMBER, m : MONTH, f : BOOLEAN, r : RESOURCES, p : BOOLEAN, A : ARRAY STAGE OF HEALTH): NUMBER = 
+  		IF h=dead THEN 0
+  		ELSIF s=null THEN 15 - (No[m_kid] + No[f_kid] + No[m_sm] + No[f_sm] 
+				+ No[m_rut] + No[f_rut] + No[pregnant] + No[weaning])
+  		ELSIF h=unhealthy OR r=zero OR p=TRUE THEN tabulate(s, No, m) %if currently unhealthy or about to be so, then don't mature
+  		ELSIF h=healthy AND NOT s=null THEN mature(s, No, m, f)
+  		ELSE No[s]
+  		ENDIF;
+  		
+    clock(m : MONTH): MONTH = 
+  		IF m=Jan THEN Feb
+  		ELSIF m=Feb THEN March
+  		ELSIF m=March THEN Apr
+  		ELSIF m=Apr THEN May
+  		ELSIF m=May THEN June
+  		ELSIF m=June THEN July
+  		ELSIF m=July THEN Aug
+  		ELSIF m=Aug THEN Sept
+  		ELSIF m=Sept THEN Oct
+  		ELSIF m=Oct THEN Nov
+  		ELSIF m=Nov THEN Dec
+  		ELSE Jan
+  		ENDIF;	
+
+  	fertility(m_rut : NUMBER, f_rut : NUMBER, m_rut_h : HEALTH, f_rut_h : HEALTH): BOOLEAN = 
+  		IF m_rut > 0 AND f_rut > 0 AND m_rut_h=healthy AND f_rut_h=healthy THEN TRUE
+  		ELSE FALSE
+  		ENDIF;
+  	
+  	dangerous(c : CELL, p : CELL): BOOLEAN =
+  		IF c=p THEN TRUE
+  		ELSE FALSE
+  		ENDIF;
+  		
+  HerdA : MODULE =
+  BEGIN
+    LOCAL f : FLAG 						%fertility
+	LOCAL danger : FLAG 				%herd threatened by predator
+	LOCAL p : CELL						%predator location
+	LOCAL c : CELL						%herd location
+    LOCAL m : MONTH						%month
+    LOCAL A : HERDtuple					%herd A
+    LOCAL r : ARRAY CELL OF RESOURCES 	%landscape resources/food availability
+  
+  DEFINITION
+  	p IN {c6,c8,c9};
+  	danger = dangerous(c,p);
+  	f = fertility(A.1[m_rut], A.1[f_rut], A.2[m_rut], A.2[f_rut]);	
+					
+  INITIALIZATION
+  	m = Sept;
+    A.1[m_kid] = 0;
+	A.1[f_kid] = 0;
+	A.1[m_sm] = 6;
+	A.1[f_sm] = 1;
+	A.1[m_rut] = 0;
+	A.1[f_rut] = 0;
+	A.1[pregnant] = 0;
+	A.1[weaning] = 0;
+	A.1[null] = 15 - (A.1[m_kid] + A.1[f_kid] + A.1[m_sm] + A.1[f_sm] 
+				+ A.1[m_rut] + A.1[f_rut] + A.1[pregnant] + A.1[weaning]);
+	A.2 = [[s:STAGE] healthy];
+  	c = c1;
+	r = [[c:CELL] zero];
+	
+  TRANSITION %transition by months, so that part of the range becomes unavailable or resources universally decrease
+  [
+  %think about hunters and predators as herd with presence of food as the location of ibex or whatever
+  %next step, make a new module as a new herd, whatever it may be, and have it interacting with the resource landscape 
+  %such that it effects herd A, once that works THEN think about them exchanging ibex numbers etc. 
+	  		  
+	 r[c]=zero AND c=c' --> 
+    	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f)];
+    	A'.2=[[s:STAGE] inc_h_down(A.2[s])];
+    	m'=clock(m);
+     []
+	 A.1[null] = 15 --> c'=c;
+	 
+     []
+     c=c1 -->
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+		c' IN {c1,c2,c4,c5};
+     	m'=clock(m);
+		%would like to say, if danger=TRUE then c=c1 (ibex escapes) else in {..}
+		
+     []
+     c=c2 -->
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+		c' IN {c1,c2,c3,c4,c5,c6};
+     	m'=clock(m);
+
+     []
+    c=c3 -->
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+		c' IN {c2,c3,c5,c6};
+     	m'=clock(m);
+    []
+    c=c4 --> 
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+    	c' IN {c1,c2,c4,c5,c7,c8};
+     	m'=clock(m);
+
+    []
+    c=c5 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+    	c' IN {c1,c2,c3,c4,c5,c6,c7,c8,c9};
+     	m'=clock(m);
+
+    []
+    c=c6 --> 
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+		%to use new value of A.1, try A'.1 or try new definition of A'.1 (plug it in, and use a new function to do that for me) 
+    	c' IN {c2,c3,c5,c6,c8,c9};
+     	m'=clock(m);
+
+    []
+    c=c7 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+    	c' IN {c4,c5,c7,c8};
+     	m'=clock(m);
+
+    []
+    c=c8 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+    	c' IN {c4,c5,c6,c7,c8,c9};
+     	m'=clock(m);
+
+    []
+    c=c9 -->  
+    	r'=[[c:CELL] if c=c1 then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[c], danger, A.2)];
+		A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[c], A.2)];
+    	c' IN {c5,c6,c8,c9};
+     	m'=clock(m);
+
+  ]
+  END;
+END
+
+
+%PROBLEMS:
+%how to make the modules interact...
+%distribution of sexes at 'birth' and 'death' DONE (for now)
+
+
+
