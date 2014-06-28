@@ -475,14 +475,6 @@ BEGIN
 
   Environment : MODULE = Calendar[]HerdA[]HerdB[]Interactions;
 
-%sal > (start-simulation! "Environment")
-%*** ERROR:bigloo:
-%`segmentation violation' exception -- raised
-%    1. make-fsm, sal-simulator-front-end.scm:char 1658
-%    2. ... start-simulation!, stdin:char 25
-
 %---------------------------------------------------------------------------------------
 
 END
-
-% no extinction (a liveness condition): you enter the lifestages infinitely many times
