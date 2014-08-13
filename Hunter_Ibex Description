@@ -1,0 +1,242 @@
+DISCOURSE ON IBEX MODEL  🐐  🐐  🐐  🐐  🐐  🐐
+
+Constructs
+	STAGE		: lifestages of an ibex; "m" indicates male, "f" indicates female, "kid"
+				  indicates an ibex old enough to feed itself (approximately 1 year old); 
+				  "juv" indicates the juvenile stage for males, in which young males are 
+				  too young to compete in the rut, corresponding to age 2 through 4; "sm" 
+				  indicates the sexually mature stage, occurring at approximately 2 years 
+				  old in females and 5 years old in male; "rut" is the state of fertility 
+				  and sexual competition for mating among ibex; "weaning" is the period in 
+				  which the mother is supplying food to her young and so mother+kids are 
+				  considered one functional until weaning is complete (5-8 months); "null" 
+				  indicates empty/no ibex; different stages of life for the ibex are more
+				  vulnerable to predation than others, which is represented in the 
+				  herd_health function; the maturing function is a simplistic represenation
+				  of the maturation progression for both males and females; the length of 
+				  pregnancy for "pregnant" females is 2 months in this model, though actual 
+				  gestation 6 months, so the combination pregnant + weaning stage lasts a 
+				  whole year; the maximum lifespan of ibex in the wild is 15-17 years, 
+				  however, I avoid the problem of killing ibex due to old age (or I could 
+				  introduce elderly stage) by simply counting the number of sm adults, so 
+				  any decrease can be considered natural death due to age
+				  progression (m): m_kid --> m_juv --> m_sm <--> m_rut
+				  				   if death occurs, --> null
+				  progression (f): f_kid --> f_sm <--> f_rut --> pregnant --> weaning -->
+				  				   f_sm + m_kid + f_kid (this is the "birth" process)
+				  				   if death occurs, --> null
+	HEALTH		: health options for each demographic of ibex; I consider the whole 
+				  demographic equally threatened by health concerns for practical reasons;
+				  there are only three levels of health here, but more resolution could be
+				  gained at the cost of increasing combinatorial complexity
+	NUMBER		: maximum herd size, also used to indicate how many ibex are in a given
+				  life stage, etc.
+	CELL		: grid cells of landscape; landscape is divided into cells that are given
+				  names used to track the level of resources available to an ibex herd in
+				  each cell, as well as the location of a given herd or predator; 1 cell is
+				  approximately 3 square kilometers in real landscape [source: 'estimators 
+				  or snow leopard abundance' ibex data]
+	FLAG		: boolean variable (i.e. TRUE or FALSE), used to indicate presence of
+				  danger from predator and the fertility status of the herd
+	RESOURCES	: level of resources available for herd consumption (assigned to each 
+				  location cell in an array); I have defined only three levels of resources
+				  but more resolution could be gained at the cost of increasing 
+				  combinatorial complexity
+	MONTH		: months; used to track time, but any sufficiently small operational unit
+				  can be used to track time
+	HERDtuple	: the data structure (tuple) used to hold herd information; for herd A, 
+				  the first tuple entry (A.1) is indexed by demographic information of herd
+				  and thus gives how many ibex in the herd are in each lifestage; the 
+				  second tuple entry (A.2) is indexed by demographic information again,
+				  but holds the health of each demographic of the herd
+
+Functions
+	floor_div2	: takes the floor of division by 2 
+	ceiling_div2: takes the ceiling of division by 2
+	inc_h_down	: increments health down (healthy --> unhealthy --> dead <--> dead)
+	inc_h_up	: increments health up (unhealthy --> healthy, dead <--> dead)
+	inc_r_down	: increments resources down (high --> low --> zero)
+	inc_r_up	: increments resources up (zero --> low --> high)
+	calc_null	: calculates the number of empty ('null') spaces for ibex in a herd
+	aug_h		: calls inc_h_down when predator is present or ibex inhabits cell with 
+				  zero resources; calls inc_h_up otherwise 
+	inc_stage_h : defines which stages are most vulnerable to lack of food and predation;
+				  non-empty stages become and unhealthy and then die in the following order:
+				  weaning, pregnant, m_kid and f_kid, m_juv, m_rut and f_rut, m_sm and f_sm 
+				  (they recover health in the reverse order); the null stage is never passed
+				  into this function because it does not change state; the function orders 
+				  the stages to be passed into aug_h based on the health of the prior stages 
+				  in the order of incrementation
+	health_fn	: guards empty stages, dead stages, and "null" from being passed into the
+				  inc_stage_h function; assigns empty and dead stages to healthy, thus
+				  reinitializing the stage
+	mature		: ibex do not transition states unless it is Sept, Oct, Nov, or Dec; in Sept, 
+				  sexually mature and weaning ibex mature to rutting ibex, male kids mature 
+				  to juveniles, male and female kids are counted if the herd is not full, 
+				  otherwise they can be considered to die from lack of resources due to 
+				  lack of resources from heavy herd browsing; in Oct, when the herd is 
+				  fertile, rutting feamles mature to pregnant; in Nov, when the herd is 
+				  fertile, rutting feamles mature to pregnant; in Dec, pregnant ibex become 
+				  weaning ibex, female kids mature to sexually mature, and rutting ibex are 
+				  returned to sexually mature 
+	tabulate	: ibex do not transition states unless it is Sept, Oct, Nov, or Dec; in Sept,
+				  rutting ibex are returned to the sexually mature stages, male kids to do 
+				  not mature to juveniles, weaning ibex are returned to female sexually 
+				  mature (implicit loss of their babies); in Oct, rutting ibex are returned 
+				  to the sexually mature stages and pregnant ibex do not survive; in Nov, 
+				  rutting and weaning ibex are returned to the sexually mature stages and 
+				  pregnant ibex do not survive; in Dec, females kids do not  mature to 
+				  sexually mature stages, babies die during weaning and are not added to 
+				  the kid tabulations, rutting and weaning ibex are returned to the 
+				  sexually mature stages and pregnant ibex do not survive
+	stage_fn	: guards which stages are pushed into mature and tabulate functions; dead 
+				  stages are emptied (number of ibex in the stage is set to 0); null (the 
+				  number of uninitialized ibex spots in the herd) is recalculated, note 
+				  that dead ibex hold a spot for one step (one month) and are not considered
+				  uninitialized; if a stage is unhealthy or about to be (zero resources or 
+				  a predator is present) then the stage will not transition according to 
+				  the mature function, and needs to be able to accomodate a healthy cohort
+				  entering into an unhealthy cohort (or vice versa), so the stages are 
+				  passed into the tabulate function; otherwise the stages are passed into
+				  the mature function				    
+	fertility	: determines if offspring can be produced during seasonal rut (at least 
+				  one healthy male and one healthy female are required to attempt a mating); 
+				  TRUE if mating is possible, else FALSE
+	dangerous	: determines if herd is threatened by predator; if predator occupies same
+				  cell of territory as herd does; TRUE if herd is threatened, else FALSE
+	fission_bigX: resets numbers of m_sm and f_sm in the larger herd participating in 
+				  fission by taking the floor divided by 2 of the total number or m_sm (or 
+				  f_sm) in the population
+	fission_smallX: resets numbers of m_sm and f_sm in the smaller herd participating in 
+				  fission by taking the ceiling divided by 2 of the total number or m_sm 
+				  (or f_sm) in the population
+	fusionA		: resets numbers of all stages (except null) of HerdA to total of HerdA and 
+				  HerdB causing fusion of the two herds; number of null stage is set to 
+				  remaining uninitialized ibex spots in the herd
+	fusionB		: resets numbers of all stages (except null) of HerdB to 0 causing fusion 
+				  of the two herds with HerdB uninitialized; number of null stage is set to 
+				  maximum uninitialized ibex spots of a herd [15]
+	fission_fusion_A: if HerdA and HerdB are both large herds (i.e. they contain at least 5 
+					  ibex) then male and female sexually mature stages undergo fission, 
+					  according to which herd is larger, otherwise all stages (except null,
+					  which is recalculated) undergo fusion
+	fission_fusion_B: if HerdA and HerdB are both large herds (i.e. they contain at least 5 
+					  ibex) then male and female sexually mature stages undergo fission, 
+					  according to which herd is larger, otherwise all stages (except null,
+					  which is recalculated) undergo fusion
+	hunted		: exposes ibex herd to hunting; 1 ibex is acquired at a time, with hunters
+				  choosing m_rut, m_sm, f_rut, f_sm, or pregnant ibex in order of preference
+	
+Variables & Definitions
+*	f: boolean variable indicates fertility of HerdX; TRUE is fertile; calculated by the 
+	   function fertility
+*	danger: boolean variable indicates if HerdX occupies the same cell as a predator and
+			is thus in danger; TRUE is in danger; calculated by the function dangerous
+	p : a cell variable; indicates location of predator to the herd; p is randomly set to 
+		be in c6, c8, or c9 at each step
+	a : a cell variable; indicates location of HerdA
+	b : a cell variable; indicates location of HerdB
+	z : a cell variable; indicates location of Hunters
+	m : a month variable; indicates current month
+	A : a HERDtuple construct; holds numbers and health of HerdA stages
+	B :	a HERDtuple construct; holds numbers and health of HerdB stages
+	r : an array construct; holds the resource level of each cell in the environment
+	goA 	: boolean variable guards whether HerdA steps; TRUE is able to step 
+	goB		: boolean variable guards whether HerdB steps; TRUE is able to step 
+	goInter	: boolean variable guards whether the Interactions module steps, i.e. guards
+			  fission-fusion dynamics; TRUE is able to step 
+	goHunt	: boolean variable guards whether the Hunters model steps; i.e. guards whether
+			  hunters are in the environment; TRUE is able to step
+	disturbanceA : boolean variable; indicates whether HerdA has experienced disturbance;
+				   TRUE is disturbed
+	disturbanceB : boolean variable; indicates whether HerdA has experienced disturbance;
+				   TRUE is disturbed
+* variables are local to each herd; all other variables are global	
+	
+Transitions
+Hunters : MODULE =
+	Transitions are governed by months (hunters only traverse the environment during hunting
+season) and previous hunting path taken. At each step, goHunt is set to FALSE, as a guard 
+to ensure that hunting happens only once per month in the Environment composition. goHunt 
+is set to TRUE in the Calendar module only during hunting season.
+(1) Hunting season begins in October, and hunters enter the environment at cell c7. 
+(2) Hunters may choose 1 of 2 routes for their hunting season: c7 --> c5 --> c6 --> c7 or 
+	c7 --> c8 --> c9 --> c7; the path is chosen in November
+(3) In December the hunters continue along their path 
+(4) See (3), but for the second path
+(5) In January the hunters return to c7 and do not hunt again until October
+HerdX : MODULE =
+	Transitions are governed by herd location to minimize combinatorial complexity. At each 
+step, the resources of the landscape cells adjust (down as the herd consumes resources in 
+its current cell; up as resources recover in cells without herds), the ibex decide where 
+in the landscape to move next (either moving to an adjacent landscape cell or staying in 
+the current cell), and the herd health and stage numbers adjust based on the month, predator 
+danger, and resource levels of the landscape. These operations are performed by calling 
+stage_fn, health_fn, and the inc_r_up/down functions at each step. There is one additional 
+guard, which stabilizes an extinct herd so that it no longer "travels," i.e. a completely 
+uninitialized herd no longer moves around. At each step, goX is set to FALSE, as a guard 
+to ensure that HerdX moves once per month in the Environment composition. goX is set to 
+TRUE in the Calendar module when time progresses. 
+(1) When the herd has been disturbed by hunters, the herd may head to the escape range 
+	instead of eating. 
+(2) When the herd is empty, the herd does not traverse the environment.
+(3) When the herd is in c1, the herd consumes resources in the c1 (and resources recover 
+	in the environment wherever no herd is eating), the numbers, fertility, health, and 
+	danger metrics of the herd reset, and the herd can travel to adjacent cells or stay in 
+	c1. These rests all occur simultaneously and count as one step, after which the guard 
+	goX is reset to FALSE, ending the HerdX's individual movement for the month (but not 
+	prohibiting interactions from occurring). Additionally, the whole resource grid may be 
+	reset seasonally in the Calendar module.
+(4) See (3), but for c2
+(5) See (3), but for c3
+(6) See (3), but for c4
+(7) See (3), but for c5
+(8) See (3), but for c6
+(9) See (3), but for c7
+(10) See (3), but for c8
+(11) See (3), but for c9
+Calendar : MODULE = 
+	Transitions increment the month after all Hunters, HerdX, and Interactions have stepped 
+(guarded by goX variables set to FALSE), then reset the goX variables to TRUE. 
+(1) In January, the calendar steps to February and all goX variables are set to TRUE except 
+	for goHunt (hunting season has ended). Additionally, all high resource cells are set 
+	to low resource level to simulate increased foraging time and decreased food availability 
+	during winter snowfall.
+(2) In February, the calendar steps to March and the goX and goInter variables are set to 
+	TRUE. Additionally, all high resource cells are set to low resource level to simulate 
+	increased foraging time and decreased food availability during winter snowfall.
+(3) In March, the calendar steps to April and the goX and goInter variables are set to TRUE.
+(4) See (3), but for April
+(5) See (3), but for May
+(6) See (3), but for June
+(7) See (3), but for July
+(8) See (3), but for August
+(9) In September, the calendar steps to October and all goX variables are set to TRUE, 
+	including goHunt (hunting season has begun). 
+(10) See (9), but for October
+(11) See (9), but for November
+(12) In December, the calendar steps to January and all goX variables are set to TRUE, 
+	including goHunt. Additionally, all high resource cells are set to low resource level 
+	to simulate increased foraging time and decreased food availability during winter snowfall.
+Interact : MODULE = 
+	Transitions govern interactions between herds. When both herds have stepped (goX 
+variables set to FALSE) but the month has not yet changed (goInter still set to TRUE) and 
+the herds are in the same location, herds undergo fission-fusion, leading to reassortment
+of sexually mature males and females in each herd. 
+(1) If HerdA and HerdB inhabit the same landscape cell, both herds undergo fission or fusion 
+	mediated by the fission_fusionX functions. goInter is set to FALSE after an interaction 
+	occurs.
+(2) If Hunters inhabit the same cell as HerdA, the herd loses a vulnerable adult ibex, 
+	according to the hunted function, disturbanceA is set to TRUE to indicate that HerdA 
+	will be more wary and attempt to head to the "escape range" away from hunting territory, 
+	and goInter and goHunt are set to FALSE. Additionally, the number of uninitialized ibex 
+	spots in HerdB is recalculated for convenience. 
+(3) See (2), but for HerdB
+(4) If HerdA and HerdB do not occupy the same landscape cell, nor do the Hunters occupy 
+	cells with ibex herds, the number of uninitialized ibex spots in the herds are 
+	recalculated for convenience. 
+Environment : MODULE = 
+	Asynchronous composition of HerdX modules, Calendar module, Hunters, and Interact modules 
+guarded by goX variables. 
+
+Biological Importance
