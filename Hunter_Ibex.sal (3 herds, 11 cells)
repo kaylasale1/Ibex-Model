@@ -1,0 +1,856 @@
+Hunter_Ibex: CONTEXT = 
+BEGIN
+  STAGE : TYPE = {m_kid,f_kid,m_juv,m_sm,f_sm,m_rut,f_rut,pregnant,weaning,null};
+  HEALTH : TYPE = {healthy,unhealthy,dead};
+  NUMBER : TYPE = [0..20]; %max # of ibex in herd is 15
+  CELL : TYPE = {c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11}; %location in the environment
+  FLAG : TYPE = BOOLEAN;
+  RESOURCES : TYPE = {zero,low,high};
+  MONTH : TYPE = {Jan,Feb,March,Apr,May,June,July,Aug,Sept,Oct,Nov,Dec}; %month
+  HERDtuple : TYPE = [ARRAY STAGE OF NUMBER, ARRAY STAGE OF HEALTH]; 
+
+ 	floor_div2(n : NUMBER) : NUMBER = 
+		IF n mod 2 = 0 THEN n div 2
+		ELSE (n-1) div 2	
+		ENDIF;
+		
+	ceiling_div2(n : NUMBER) : NUMBER =
+		IF n mod 2 = 0 THEN n div 2
+		ELSE (n+1) div 2
+		ENDIF; 
+		
+  	inc_h_down(h : HEALTH): HEALTH = 
+  		IF h=healthy THEN unhealthy
+  		ELSE dead
+  		ENDIF;
+
+  	inc_h_up(h : HEALTH): HEALTH = 
+  		IF h=dead THEN dead
+  		ELSE healthy
+  		ENDIF;
+    		
+  	inc_r_down(r : RESOURCES): RESOURCES =
+  		IF r=high THEN low
+  		ELSE zero
+  		ENDIF;
+  		
+  	inc_r_up(r : RESOURCES): RESOURCES = 
+  		IF r=zero THEN low
+  		ELSE high
+  		ENDIF;
+
+%---------------------------------------------------------------------------------------
+% IBEX FUNCTIONS
+%---------------------------------------------------------------------------------------
+  		
+ 	calc_null(No: ARRAY STAGE OF NUMBER): NUMBER = 
+ 		15 - No[m_kid] - No[f_kid] - No[m_juv] - No[m_sm] - No[f_sm] - No[m_rut] - No[f_rut] - No[pregnant] - No[weaning];
+ 		
+ 	aug_h(h : HEALTH, p : FLAG, r : RESOURCES): HEALTH = 
+ 	  	IF r = zero OR p = TRUE THEN inc_h_down(h)
+  		ELSE inc_h_up(h)
+  		ENDIF; 
+  	
+  	inc_stage_h(s: STAGE, h : HEALTH, p : FLAG, r : RESOURCES, A : ARRAY STAGE OF HEALTH): HEALTH = 
+  	  	IF A=[[i:STAGE] healthy] AND s=weaning THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND s=pregnant THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND s=m_kid OR s=f_kid OR s=m_juv THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND A[m_kid]=unhealthy 
+  				AND A[f_kid]=unhealthy AND A[m_juv]=unhealthy AND s=f_rut OR s=m_rut THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=unhealthy AND A[pregnant]=unhealthy AND A[m_kid]=unhealthy 
+  				AND A[f_kid]=unhealthy AND A[m_juv]=unhealthy AND A[f_rut]=unhealthy AND A[m_rut]=unhealthy 
+  				AND s=f_sm OR s=m_sm THEN aug_h(h, p, r)
+  		ELSIF A=[[i:STAGE] unhealthy] AND s=weaning THEN aug_h(h, p, r)
+	  	ELSIF A[weaning]=dead AND s=pregnant THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND s=m_kid OR s=f_kid OR s=m_juv THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND A[m_kid]=dead AND A[f_kid]=dead AND A[m_juv]=dead
+  				AND s=f_rut OR s=m_rut THEN aug_h(h, p, r)
+  		ELSIF A[weaning]=dead AND A[pregnant]=dead AND A[m_kid]=dead AND A[f_kid]=dead AND A[m_juv]=dead
+  				AND A[f_rut]=dead AND A[m_rut]=dead AND s=f_sm OR s=m_sm THEN aug_h(h, p, r)
+  		ELSE aug_h(h, p, r)
+  		ENDIF;
+  	
+  	health_fn(s : STAGE, h: HEALTH, No : ARRAY STAGE OF NUMBER, p : FLAG, r : RESOURCES, A : ARRAY STAGE OF HEALTH): HEALTH =
+  		IF s=null THEN healthy
+  		ELSIF No[s]=0 THEN healthy
+  		ELSIF h=dead THEN healthy
+  		ELSE inc_stage_h(s, h, p, r, A)
+  		ENDIF;
+  		
+  	mature(s : STAGE, No : ARRAY STAGE OF NUMBER, m : MONTH, f : FLAG): NUMBER =
+  		IF m=Sept THEN
+  			IF s=f_sm OR s=weaning THEN 0
+  			ELSIF s=m_sm THEN No[m_juv]
+  			ELSIF s=m_rut THEN No[m_sm]
+  			ELSIF s=f_rut THEN No[f_sm] + No[weaning]
+  			ELSIF s=m_juv THEN No[m_kid]
+  			ELSIF No[null] > 0 AND s=m_kid THEN No[weaning] %if herd is full, not enough resources for new kids un-facilitated by mother
+  			ELSIF No[null] > 0 AND s=f_kid THEN No[weaning] + No[f_kid]
+  			ELSIF No[null] <= 0 AND s=m_kid THEN 0
+  			ELSIF No[null] <= 0 AND s=f_kid THEN No[f_kid]
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Oct THEN
+  			IF s=f_rut AND f=TRUE THEN 0
+  			ELSIF s=pregnant AND f=TRUE THEN No[f_rut]
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Nov THEN
+  			IF s=f_rut AND f=TRUE THEN 0
+  			ELSIF s=pregnant AND f=TRUE THEN No[f_rut] + No[pregnant]
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Dec THEN
+  			IF s=weaning then No[pregnant]
+  			ELSIF s=m_sm THEN No[m_rut] + No[m_sm]
+  			ELSIF s=f_sm THEN No[f_rut] + No[f_sm] + No[f_kid] 
+  			ELSIF s=m_rut OR s=f_kid OR s=f_rut OR s=pregnant THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSE No[s]
+  		ENDIF; 
+  		
+  	tabulate(s : STAGE, No : ARRAY STAGE OF NUMBER, m : MONTH): NUMBER =
+  	  	IF m=Sept THEN
+  			IF s=m_sm THEN No[m_sm] 
+  			ELSIF s=f_sm THEN No[f_sm] + No[weaning]
+  			ELSIF s=m_rut OR s=f_rut OR s=pregnant OR s=weaning THEN 0
+  			ELSE No[s] %unhealthy kids do not mature, and there are no new kids because babies died whilst weaninga
+  			ENDIF
+  		ELSIF m=Oct THEN
+    		IF s=m_sm THEN No[m_sm] + No[m_rut]
+  			ELSIF s=f_sm THEN No[f_sm] + No[f_rut] %pregnant ibex don't survive being unhealthy or predated
+  			ELSIF s=m_rut OR s=f_rut OR s=pregnant THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Nov THEN
+    		IF s=m_sm THEN No[m_sm] + No[m_rut]
+  			ELSIF s=f_sm THEN No[f_sm] + No[f_rut] + No[weaning]  %pregnant ibex don't survive being unhealthy or predated
+  			ELSIF s=m_rut OR s=f_rut OR s=pregnant OR s=weaning THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSIF m=Dec THEN
+  			IF s=m_sm THEN No[m_rut] + No[m_sm] %unhealthy kids do not mature, and there are no new kids because babies died whilst weaning
+  			ELSIF s=f_sm THEN No[f_rut] + No[f_sm] + No[weaning]
+  			ELSIF s=m_rut OR s=f_rut OR s=pregnant OR s=weaning THEN 0
+  			ELSE No[s]
+  			ENDIF
+  		ELSE No[s]
+  		ENDIF;
+  		%order of incurring "unhealth": weaning, pregnant, kids, rut, sm
+  		
+  	stage_fn(s : STAGE, h: HEALTH, No : ARRAY STAGE OF NUMBER, m : MONTH, f : FLAG, r : RESOURCES, p : FLAG, A : ARRAY STAGE OF HEALTH): NUMBER = 
+  		IF h=dead THEN 0
+  		ELSIF s=null THEN calc_null(No)
+  		ELSIF h=unhealthy OR r=zero OR p=TRUE THEN tabulate(s, No, m) %if currently unhealthy or about to be so, then don't mature
+  		ELSIF h=healthy AND NOT s=null THEN mature(s, No, m, f)
+  		ELSE No[s]
+  		ENDIF;
+
+  	fertility(m_rut : NUMBER, f_rut : NUMBER, m_rut_h : HEALTH, f_rut_h : HEALTH): BOOLEAN = 
+  		IF m_rut > 0 AND f_rut > 0 AND m_rut_h=healthy AND f_rut_h=healthy THEN TRUE
+  		ELSE FALSE
+  		ENDIF;
+  	
+  	dangerous(c : CELL, p : CELL): BOOLEAN =
+  		IF c=p THEN TRUE
+  		ELSE FALSE
+  		ENDIF;	
+	
+%---------------------------------------------------------------------------------------
+% HUNTER FUNCTIONS
+%---------------------------------------------------------------------------------------
+
+%---------------------------------------------------------------------------------------
+% INTERACTIONS FUNCTIONS
+%---------------------------------------------------------------------------------------
+
+  	fission_bigX(s : STAGE, bigA : ARRAY STAGE OF NUMBER, B : ARRAY STAGE OF NUMBER) : NUMBER =
+  		IF s=m_sm AND (15 - bigA[null]) + (ceiling_div2(bigA[m_sm] + B[m_sm]) + ceiling_div2(bigA[f_sm] + B[f_sm])) > 15 THEN floor_div2(bigA[m_sm] + B[m_sm])
+  		ELSIF s=f_sm AND (15 - bigA[null]) + (ceiling_div2(bigA[m_sm] + B[m_sm]) + ceiling_div2(bigA[f_sm] + B[f_sm])) > 15 THEN floor_div2(bigA[f_sm] + B[f_sm])
+  		ELSE bigA[s]
+  		ENDIF;
+  	
+  	fission_smallX(s : STAGE, A : ARRAY STAGE OF NUMBER, smallB : ARRAY STAGE OF NUMBER) : NUMBER =
+  		IF s=m_sm AND (15 - smallB[null]) + (ceiling_div2(A[m_sm] + smallB[m_sm]) + ceiling_div2(A[f_sm] + smallB[f_sm])) > 15 THEN ceiling_div2(A[m_sm] + smallB[m_sm])
+  		ELSIF s=f_sm AND (15 - smallB[null]) + (ceiling_div2(A[m_sm] + smallB[m_sm]) + ceiling_div2(A[f_sm] + smallB[f_sm])) > 15 THEN ceiling_div2(A[f_sm] + smallB[f_sm])
+  		ELSE smallB[s]
+  		ENDIF;
+  		
+  	fusionA(s : STAGE, A : ARRAY STAGE OF NUMBER, B : ARRAY STAGE OF NUMBER) : NUMBER =
+  		IF NOT s=null THEN A[s]+B[s]
+  		ELSE A[s]-(15 - B[null])
+  		ENDIF;
+  		
+  	fusionB(s : STAGE, A : ARRAY STAGE OF NUMBER, B : ARRAY STAGE OF NUMBER) : NUMBER =
+  		IF NOT s=null THEN 0
+  		ELSE 15
+  		ENDIF;
+  		
+  	fission_fusionA(s: STAGE, A : ARRAY STAGE OF NUMBER, B : ARRAY STAGE OF NUMBER ) : NUMBER =
+  		IF s=m_sm OR s=f_sm THEN
+			  if (A[null] + B[null]) <= 1 then A[s]
+  			elsif B[null] > A[null] AND B[null] <= 10 AND A[null] <= 10 then fission_bigX(s, A, B) 
+		  	elsif B[null] <= 10 AND A[null] <= 10 then fission_smallX(s, A, B) 
+		  	else fusionA(s, A, B)
+		  	endif
+		  ELSIF s=null THEN calc_null(A)
+		  ELSE 
+			  if (A[null] + B[null]) < 1 then A[s]
+			  elsif A[null] <= 10 AND B[null] <= 10 then A[s] 
+   	 		else fusionA(s, A, B) 
+   	 		endif
+		ENDIF; 
+		
+  	fission_fusionB(s: STAGE, A : ARRAY STAGE OF NUMBER, B : ARRAY STAGE OF NUMBER ) : NUMBER =
+		IF s=m_sm OR s=f_sm THEN
+			if (A[null] + B[null]) <= 1 then B[s]
+			elsif B[null] < A[null] AND B[null] <= 10 AND A[null] <= 10 then fission_bigX(m_sm, A, B) 
+			elsif B[null] <= 10 AND A[null] <= 10 then fission_smallX(m_sm, A, B) 
+			else fusionB(m_sm, A, B)
+			endif
+		ELSIF s=null THEN calc_null(B)
+		ELSE
+			if (A[null] + B[null]) < 1 then B[s]
+			elsif A[null] <= 10 AND B[null] <= 10 then B[weaning] 
+			else fusionB(weaning, A, B) 
+			endif
+		ENDIF;
+  		  		
+	hunted(s : STAGE, No : ARRAY STAGE OF NUMBER): NUMBER=
+		IF No[m_rut] > 0 THEN
+			IF s=m_rut THEN No[m_rut]-1
+			ELSE No[s]
+			ENDIF
+		ELSIF No[m_sm] > 0 THEN
+			IF s=m_sm THEN No[m_sm]-1
+			ELSE No[s]
+			ENDIF
+		ElSIF No[f_rut] > 0 THEN
+			IF s=f_rut THEN No[f_rut]-1
+			ELSE No[s]
+			ENDIF
+		ELSIF No[f_sm] > 0 THEN
+			IF s=f_sm THEN No[f_sm]-1
+			ELSE No[s]
+			ENDIF
+		ELSIF No[pregnant] > 0 THEN
+			IF s=pregnant THEN No[pregnant]-1
+			ELSE No[s]
+			ENDIF
+		ELSE No[s]
+		ENDIF;
+
+%---------------------------------------------------------------------------------------
+
+  Hunters : MODULE =
+  BEGIN
+	  GLOBAL z : CELL						%hunter location
+    GLOBAL m : MONTH					%month
+    GLOBAL goHunt : FLAG			%time to step
+  
+  INITIALIZATION
+  	m=Sept;
+  	z=c7;
+  	goHunt=FALSE;
+  	
+  TRANSITION 
+  [		  %(1)  
+		m=Oct AND goHunt=TRUE --> z'=c7; goHunt'=FALSE;
+		[]%(2)
+		m=Nov AND z=c7 AND goHunt=TRUE --> z' IN {c5,c8}; goHunt'=FALSE;
+		[]%(3)
+		m=Dec AND z=c8 AND goHunt=TRUE --> z'=c9; goHunt'=FALSE;
+		[]%(4)
+		m=Dec AND z=c5 AND goHunt=TRUE --> z'=c6; goHunt'=FALSE;
+		[]%(5)
+		m=Jan AND z=c6 OR z=c9 AND goHunt=TRUE --> z'=c7; goHunt'=FALSE;
+  ]
+  END;
+
+%---------------------------------------------------------------------------------------
+
+  IbexHerdA : MODULE =
+  BEGIN
+    LOCAL f : FLAG 					  	%fertility
+  	GLOBAL p : CELL					  	%predator location
+  	LOCAL danger : FLAG 				%herd threatened by predator
+  	GLOBAL a : CELL					  	%herd location
+    GLOBAL m : MONTH				  	%month
+    GLOBAL A : HERDtuple				%herd A
+    GLOBAL r : ARRAY CELL OF RESOURCES 	%landscape resources/food availability
+    GLOBAL goA : FLAG				   	%time to step? 		
+  	GLOBAL disturbanceA : FLAG	%hunter disturbance
+  	
+  DEFINITION
+  	danger = dangerous(a,p);
+  	f = fertility(A.1[m_rut], A.1[f_rut], A.2[m_rut], A.2[f_rut]);	
+					
+  INITIALIZATION
+    A.1[m_kid] = 1;
+  	A.1[f_kid] = 1;
+  	A.1[m_juv] = 1;
+  	A.1[m_sm] = 10;
+	  A.1[f_sm] = 2;
+  	A.1[m_rut] = 0;
+	  A.1[f_rut] = 0;
+  	A.1[pregnant] = 0;
+  	A.1[weaning] = 0;
+  	A.1[null] = calc_null(A.1);
+  	A.2 = [[s:STAGE] healthy];
+  	a = c1;
+  	r = [[c:CELL] high];
+  	goA = TRUE;
+	  disturbanceA = FALSE;
+  	m=Sept;
+  	p=c6;
+	
+  TRANSITION 
+  [    %(1)
+	   disturbanceA = TRUE --> a' IN {c1,c2,c4};  
+	  	disturbanceA' = FALSE;
+    	r'=[[c:CELL] if c=a then inc_r_down(r[a]) else r[c] endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+	  	goA'=FALSE;
+	   []%(2)
+	   A.1[null] = 15 AND goA=TRUE --> a'=a; goA'=FALSE;
+     []%(3)
+     a=c1 AND goA=TRUE -->
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		  A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+	  	a' IN {c1,c2,c4,c5};
+     	goA' = FALSE;		
+     []%(4)
+     a=c2 AND goA=TRUE -->
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+		  A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+		  a' IN {c1,c2,c3,c4,c5,c6};
+     	goA' = FALSE;
+     []%(5)
+     a=c3 AND goA=TRUE -->
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		  A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+	  	a' IN {c2,c3,c5,c6};
+     	goA' = FALSE;
+    []%(6)
+    a=c4 AND goA=TRUE --> 
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c1,c2,c4,c5,c7,c8};
+     	goA' = FALSE;
+    []%(7)
+    a=c5 AND goA=TRUE -->  
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c1,c2,c3,c4,c5,c6,c7,c8,c9};
+     	goA' = FALSE;
+    []%(8)
+    a=c6 AND goA=TRUE --> 
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c2,c3,c5,c6,c8,c9};
+     	goA' = FALSE;
+    []%(9)
+    a=c7 AND goA=TRUE -->
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c4,c5,c7,c8};
+     	goA' = FALSE;
+    []%(10)
+    a=c8 AND goA=TRUE -->  
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c4,c5,c6,c7,c8,c9};
+     	goA' = FALSE;
+    []%(11)
+    a=c9 AND goA=TRUE -->  
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c5,c6,c8,c9};
+     	goA' = FALSE;
+     []%(12)
+    a=c10 AND goA=TRUE -->  
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+	  	A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c7,c8,c10,c11};
+     	goA' = FALSE;    
+     []%(13)
+    a=c11 AND goA=TRUE -->  
+    	r'=[[c:CELL] if c=a then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+	  	A'.1 =[[s:STAGE] stage_fn(s, A.2[s], A.1, m, f, r[a], danger, A.2)];
+		  A'.2 = [[s:STAGE] health_fn(s, A.2[s], A.1, danger, r[a], A.2)];
+    	a' IN {c7,c8,c9,c10,c11};
+     	goA' = FALSE;  	
+  ]
+  END;
+    
+%---------------------------------------------------------------------------------------
+
+  IbexHerdB : MODULE =
+  BEGIN
+    LOCAL f : FLAG 						  %fertility
+  	GLOBAL p : CELL						  %predator location
+  	LOCAL danger : FLAG 				%herd threatened by predator
+  	GLOBAL disturbanceB : FLAG	%hunter disturbance
+	  GLOBAL b : CELL						  %herd location
+    GLOBAL m : MONTH				  	%month
+    GLOBAL B : HERDtuple				%herd B
+    GLOBAL r : ARRAY CELL OF RESOURCES 	%landscape resources/food availability
+    GLOBAL goB : FLAG					  %time to step? 		
+
+  DEFINITION
+  	danger = dangerous(b,p);
+  	f = fertility(B.1[m_rut], B.1[f_rut], B.2[m_rut], B.2[f_rut]);
+					
+  INITIALIZATION
+    B.1[m_kid] = 3;
+	  B.1[f_kid] = 3;
+  	B.1[m_juv] = 5;
+  	B.1[m_sm] = 2;
+  	B.1[f_sm] = 2;
+  	B.1[m_rut] = 0;
+  	B.1[f_rut] = 0;
+  	B.1[pregnant] = 0;
+  	B.1[weaning] = 0;
+  	B.1[null] = calc_null(B.1);
+  	B.2 = [[s:STAGE] healthy];
+  	b = c3;
+  	r = [[c:CELL] high];
+  	goB = TRUE;
+  	disturbanceB = FALSE;
+  	m=Sept;
+  	p=c6;
+		
+	%all HerdX force resources in the grid back up, but only HerdA forces resources back up 
+  TRANSITION 
+  [	   %(1)
+	  disturbanceB = TRUE --> b' IN {c1,c2,c4}; 
+	  	disturbanceB' = FALSE;
+    	r'=[[c:CELL] if c=b then inc_r_down(r[b]) else r[c] endif]; 
+	  	B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+	   	B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+		  goB'=FALSE;
+	   []%(2)
+	   B.1[null]=15 AND goB=TRUE --> b'=b; goB'=FALSE;	 
+     []%(3)
+     b=c1 AND goB=TRUE -->
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+		  B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+		  B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+		  b' IN {c1,c2,c4,c5};
+		  goB' = FALSE; 		
+     []%(4)
+     b=c2 AND goB=TRUE -->
+      r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+	  	B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+	  	B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+	  	b' IN {c1,c2,c3,c4,c5,c6};
+	  	goB' = FALSE; 
+     []%(5)
+     b=c3 AND goB=TRUE -->
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+	  	B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+	  	B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+		  b' IN {c2,c3,c5,c6};
+		  goB' = FALSE; 
+     []%(6)
+     b=c4 AND goB=TRUE --> 
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+		  B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+		  B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c1,c2,c4,c5,c7,c8};
+		  goB' = FALSE; 
+     []%(7)
+     b=c5 AND goB=TRUE -->  
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else inc_r_up(r[c]) endif]; 
+		  B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+		  B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c1,c2,c3,c4,c5,c6,c7,c8,c9};
+		  goB' = FALSE;
+     []%(8)
+     b=c6 AND goB=TRUE --> 
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+		  B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+		  B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c2,c3,c5,c6,c8,c9};
+	  	goB' = FALSE; 
+     []%(9)
+     b=c7 AND goB=TRUE -->  
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+	  	B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+		  B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c4,c5,c7,c8};
+		  goB' = FALSE; 
+     []%(10)
+     b=c8 AND goB=TRUE -->  
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+	  	B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+  		B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c4,c5,c6,c7,c8,c9};
+	  	goB' = FALSE; 
+     []%(11)
+     b=c9 AND goB=TRUE -->  
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+	  	B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+	  	B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c5,c6,c8,c9};
+  		goB' = FALSE;
+	 []%(12)
+     b=c10 AND goB=TRUE -->  
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+	  	B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+	  	B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c7,c8,c10,c11};
+	  	goB' = FALSE;
+	 []%(13)
+     b=c11 AND goB=TRUE -->  
+    	r'=[[c:CELL] if c=b then inc_r_down(r[c]) else r[c] endif]; 
+		  B'.1 =[[s:STAGE] stage_fn(s, B.2[s], B.1, m, f, r[b], danger, B.2)];
+	  	B'.2 = [[s:STAGE] health_fn(s, B.2[s], B.1, danger, r[b], B.2)];
+    	b' IN {c7,c8,c9,c10,c11};
+	  	goB' = FALSE;
+  ]
+  END;
+  
+%---------------------------------------------------------------------------------------
+
+  IbexHerdC : MODULE =
+  BEGIN
+    LOCAL f : FLAG 					  	%fertility
+  	GLOBAL p : CELL						  %predator location
+  	LOCAL danger : FLAG 				%herd threatened by predator
+  	GLOBAL disturbanceC : FLAG	%hunter disturbance
+	  GLOBAL c : CELL						  %herd location
+    GLOBAL m : MONTH					  %month
+    GLOBAL C : HERDtuple				%herd C
+    GLOBAL r : ARRAY CELL OF RESOURCES 	%landscape resources/food availability
+    GLOBAL goC : FLAG					  %time to step? 		
+
+  DEFINITION
+  	danger = dangerous(c, p);
+  	f = fertility(C.1[m_rut], C.1[f_rut], C.2[m_rut], C.2[f_rut]);
+					
+  INITIALIZATION
+    C.1[m_kid] = 5;
+	  C.1[f_kid] = 5;
+  	C.1[m_juv] = 5;
+  	C.1[m_sm] = 0;
+  	C.1[f_sm] = 0;
+  	C.1[m_rut] = 0;
+  	C.1[f_rut] = 0;
+  	C.1[pregnant] = 0;
+  	C.1[weaning] = 0;
+  	C.1[null] = calc_null(C.1);
+  	C.2 = [[s:STAGE] healthy];
+  	c = c3;
+  	r = [[c:CELL] high];
+  	goC = TRUE;
+  	disturbanceC = FALSE;
+  	m=Sept;
+  	p=c6;
+		
+	%both HerdA and HerdB force resources in the grid back up, taking out the capability for HerdB to inc resources up
+  TRANSITION 
+  [	   %(1)
+	   disturbanceC = TRUE --> c' IN {c1,c2,c4}; 
+	 	  disturbanceC' = FALSE;
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+	  	C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+		  C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+	  	goC'=FALSE;
+	   []%(2)
+	   C.1[null]=15 AND goC=TRUE --> c'=c; goC'=FALSE;	 
+     []%(3)
+     c=c1 AND goC=TRUE -->
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+		  C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+	  	C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+	  	c' IN {c1,c2,c4,c5};
+	  	goC' = FALSE; 		
+     []%(4)
+     c=c2 AND goC=TRUE -->
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+	  	C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+	  	C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+	  	c' IN {c1,c2,c3,c4,c5,c6};
+	  	goC' = FALSE; 
+     []%(5)
+     c=c3 AND goC=TRUE -->
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+  		C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+		  C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+		  c' IN {c2,c3,c5,c6};
+	  	goC' = FALSE; 
+     []%(6)
+     c=c4 AND goC=TRUE --> 
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+		  C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+		  C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c1,c2,c4,c5,c7,c8};
+		  goC' = FALSE; 
+     []%(7)
+     c=c5 AND goC=TRUE -->  
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+		  C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+		  C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c1,c2,c3,c4,c5,c6,c7,c8,c9};
+	  	goC' = FALSE;
+     []%(8)
+     c=c6 AND goC=TRUE --> 
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+  		C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+    	C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c2,c3,c5,c6,c8,c9};
+	  	goC' = FALSE; 
+     []%(9)
+     c=c7 AND goC=TRUE -->  
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+  		C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+  		C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c4,c5,c7,c8};
+	  	goC' = FALSE; 
+     []%(10)
+     c=c8 AND goC=TRUE -->  
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+	  	C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+	  	C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c4,c5,c6,c7,c8,c9};
+  		goC' = FALSE; 
+     []%(11)
+     c=c9 AND goC=TRUE -->  
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+	  	C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+	  	C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c5,c6,c8,c9};
+	  	goC' = FALSE;
+      []%(12)
+     c=c10 AND goC=TRUE -->  
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+	  	C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+	  	C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c7,c8,c10,c11};
+  		goC' = FALSE;
+      []%(13)
+     c=c11 AND goC=TRUE -->  
+    	r'=[[s:CELL] if s=c then inc_r_down(r[s]) else r[s] endif]; 
+		  C'.1 =[[s:STAGE] stage_fn(s, C.2[s], C.1, m, f, r[c], danger, C.2)];
+		  C'.2 = [[s:STAGE] health_fn(s, C.2[s], C.1, danger, r[c], C.2)];
+    	c' IN {c7,c8,c9,c10,c11};
+	  	goC' = FALSE;
+  ]
+  END;
+  
+%---------------------------------------------------------------------------------------
+
+  Calendar : MODULE =
+  BEGIN
+  	GLOBAL m : MONTH
+  	GLOBAL goA : FLAG	
+  	GLOBAL goB : FLAG
+  	GLOBAL goC : FLAG
+  	GLOBAL goInter : FLAG
+  	GLOBAL goHunt : FLAG	
+  	GLOBAL r : ARRAY CELL OF RESOURCES 	%landscape resources/food availability
+
+  INITIALIZATION
+  	m=Sept;
+  	goA=TRUE;
+  	goB=TRUE;
+  	goC=TRUE;
+	  goInter=TRUE;
+	  goHunt=FALSE;
+	
+  TRANSITION
+  [		  %(1)
+  		m=Jan AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE AND goHunt=FALSE --> 
+  			m'=Feb; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE; 
+  			r'=[[c:CELL] if NOT r[c]=zero then low else zero endif]; %winter snowfall
+  		[]%(2)
+  		m=Feb AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=March; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE;
+  			r'=[[c:CELL] if NOT r[c]=zero then low else zero endif];
+  		[]%(3)
+  		m=March AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=Apr; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE;
+  		[]%(4)
+  		m=Apr AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=May; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE;
+  		[]%(5)
+  		m=May AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=June; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE;
+  		[]%(6)
+  		m=June AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=July; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE;
+  		[]%(7)
+  		m=July AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=Aug; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE;
+  		[]%(8)
+  		m=Aug AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=Sept; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=FALSE;
+  		[]%(9)
+  		m=Sept AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE --> 
+  			m'=Oct; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=TRUE;
+  		[]%(10)
+  		m=Oct AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE AND goHunt=FALSE --> 
+  			m'=Nov; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=TRUE;
+  		[]%(11)
+  		m=Nov AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE AND goHunt=FALSE --> 
+  			m'=Dec; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=TRUE;
+  		[]%(12)
+  		m=Dec AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=FALSE AND goHunt=FALSE --> 
+  			m'=Jan; goA'=TRUE; goB'=TRUE; goC'=TRUE; goInter'=TRUE; goHunt'=TRUE;
+  			r'=[[c:CELL] if NOT r[c]=zero then low else zero endif];
+  ]
+  END;
+  
+%---------------------------------------------------------------------------------------
+
+  Interact : MODULE = 
+  BEGIN
+  	GLOBAL a : CELL
+  	GLOBAL b : CELL
+  	GLOBAL c : CELL
+  	GLOBAL z : CELL
+  	GLOBAL goA : FLAG
+  	GLOBAL goB : FLAG
+  	GLOBAL goC : FLAG
+  	GLOBAL goInter : FLAG
+  	GLOBAL goHunt : FLAG
+  	GLOBAL disturbanceA : FLAG 
+  	GLOBAL disturbanceB : FLAG
+  	GLOBAL disturbanceC : FLAG
+  	GLOBAL A : HERDtuple
+  	GLOBAL B : HERDtuple
+  	GLOBAL C : HERDtuple
+  
+  INITIALIZATION
+ 	A.1[m_kid] = 1;
+	A.1[f_kid] = 1;
+	A.1[m_juv] = 1;
+	A.1[m_sm] = 10;
+	A.1[f_sm] = 2;
+	A.1[m_rut] = 0;
+	A.1[f_rut] = 0;
+	A.1[pregnant] = 0;
+	A.1[weaning] = 0;
+	A.1[null] = calc_null(A.1);
+	A.2 = [[s:STAGE] healthy];
+  a = c1;
+	goA = TRUE;
+	disturbanceA = FALSE;
+  B.1[m_kid] = 3;
+	B.1[f_kid] = 3;
+	B.1[m_juv] = 5;
+	B.1[m_sm] = 2;
+	B.1[f_sm] = 2;
+	B.1[m_rut] = 0;
+	B.1[f_rut] = 0;
+	B.1[pregnant] = 0;
+	B.1[weaning] = 0;
+	B.1[null] = calc_null(B.1);
+	B.2 = [[s:STAGE] healthy];
+  b = c3;
+	goB = TRUE;
+	disturbanceB = FALSE;
+	goInter = TRUE;
+	C.1[m_kid] = 5;
+	C.1[f_kid] = 5;
+	C.1[m_juv] = 5;
+	C.1[m_sm] = 0;
+	C.1[f_sm] = 0;
+	C.1[m_rut] = 0;
+	C.1[f_rut] = 0;
+	C.1[pregnant] = 0;
+	C.1[weaning] = 0;
+	C.1[null] = calc_null(C.1);
+	C.2 = [[s:STAGE] healthy];
+  c = c3;
+  goC = TRUE;
+  disturbanceC = FALSE;
+		%can I just pass in A.1 and B.1?
+		
+  TRANSITION
+  [ %(1)
+	b=a AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=TRUE --> 
+		A'.1=[[s : STAGE] fission_fusionA(s, A.1, B.1)];
+		B'.1=[[s : STAGE] fission_fusionB(s, A.1, B.1)];
+	 	goInter'=FALSE;
+	%this guard mediates fission-fusion dynamics
+	[]%(2)
+	c=a AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=TRUE --> 
+		A'.1=[[s : STAGE] fission_fusionA(s, A.1, C.1)];
+		C'.1=[[s : STAGE] fission_fusionB(s, A.1, C.1)];
+	 	goInter'=FALSE;
+	%this guard mediates fission-fusion dynamics
+	[]%(3)
+	b=c AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=TRUE --> 
+		C'.1=[[s : STAGE] fission_fusionA(s, C.1, B.1)];
+		B'.1=[[s : STAGE] fission_fusionB(s, C.1, B.1)];
+	 	goInter'=FALSE;
+	%this guard mediates fission-fusion dynamics
+	[]%(4)
+	z=a AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=TRUE AND goHunt=TRUE -->
+		A'.1=[[s : STAGE] hunted(s, A.1)];
+		goInter'=FALSE;
+		goHunt'=FALSE;
+		disturbanceA'=TRUE;
+		B'.1[null]=calc_null(B.1);
+		C'.1[null]=calc_null(C.1);
+	[]%(5)
+	z=b AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=TRUE AND goHunt=TRUE -->
+		B'.1=[[s : STAGE] hunted(s, B.1)];
+		goInter'=FALSE;
+		goHunt'=FALSE;
+		disturbanceB'=TRUE;
+		A'.1[null]=calc_null(A.1);
+		C'.1[null]=calc_null(C.1);
+	[]%(6)
+	z=c AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=TRUE AND goHunt=TRUE -->
+		C'.1=[[s : STAGE] hunted(s, C.1)];
+		goInter'=FALSE;
+		goHunt'=FALSE;
+		disturbanceC'=TRUE;
+		A'.1[null]=calc_null(A.1);
+		B'.1[null]=calc_null(C.1);
+	[]%(7)
+	NOT b=a AND NOT c=a AND NOT b=c AND NOT z=a AND NOT z=b AND NOT z=c AND goA=FALSE AND goB=FALSE AND goC=FALSE AND goInter=TRUE -->
+		goInter'=FALSE; 
+		goHunt'=FALSE;
+		A'.1[null]=calc_null(A.1); 
+		B'.1[null]=calc_null(B.1);
+		C'.1[null]=calc_null(C.1);
+  ]
+  END;
+  
+%---------------------------------------------------------------------------------------
+
+  Environment : MODULE = Calendar[]IbexHerdA[]IbexHerdB[]IbexHerdC[]Hunters[]Interact;
+
+%---------------------------------------------------------------------------------------
+
+%have to reprove all of these!
+
+th2: THEOREM Environment |- (G (NOT(A.1[null] = 15 AND B.1[null] = 15))); 
+
+th3: THEOREM Environment |- (G (F (A.1[null] = 15 AND B.1[null] = 15))); 
+
+th4: THEOREM Environment |- (G (NOT(A.1[null] = 0) AND NOT(B.1[null] = 0))); 
+
+th6: THEOREM Environment |- (G (NOT(A.1[f_kid] = 0 AND A.1[f_sm] = 0 AND A.1[f_rut] = 0 AND A.1[pregnant] = 0 AND A.1[weaning] = 0 AND NOT(A.1[null]=15) AND NOT(B.1[null]=15) AND B.1[f_kid] = 0 AND B.1[f_sm] = 0 AND B.1[f_rut] = 0 AND B.1[pregnant] = 0 AND B.1[weaning] = 0))); 
+
+th10: THEOREM Environment |- (G (F (m=Jan)));
+
+th11: THEOREM Environment |- (G (F (a=c1)));
+
+th16: THEOREM Environment |- (G (F (goA=TRUE))); 
